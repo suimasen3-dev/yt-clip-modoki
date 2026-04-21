@@ -22,7 +22,8 @@
         .time-ctrls { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
         .time-ctrls input { width: 95px; padding: 6px; border-radius: 4px; border: 1px solid #444; background: #0f0f0f; color: #fff; font-size: 13px; font-family: monospace; }
         
-        button { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; transition: opacity 0.2s; white-space: nowrap; }
+        button { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; transition: opacity 0.2s; white-space: nowrap; outline: none; }
+        button:focus { outline: none; }
         button:hover { opacity: 0.8; }
         .btn-load { background: #cc0000; color: white; }
         .btn-paste { background: #444; color: white; }
@@ -104,6 +105,12 @@
     tag.src = "https://www.youtube.com/iframe_api";
     document.head.appendChild(tag);
 
+    function focusP() {
+        // プレイヤーにフォーカスを戻す
+        const iframe = document.getElementById('player');
+        if (iframe) iframe.focus();
+    }
+
     function fmt(s) {
         const h = Math.floor(s / 3600);
         const m = Math.floor((s % 3600) / 60);
@@ -123,6 +130,7 @@
             const text = await navigator.clipboard.readText();
             document.getElementById('v-url').value = text;
         } catch (err) { alert('貼り付け許可が必要です'); }
+        focusP();
     }
 
     function onYouTubeIframeAPIReady() {
@@ -165,7 +173,6 @@
     function loadV() {
         const id = parseId(document.getElementById('v-url').value);
         if (id) {
-            // URL読み込み時に各項目をリセット
             document.getElementById('t-start').value = "00:00:00";
             document.getElementById('t-end').value = "00:00:00";
             document.getElementById('output-url').value = "";
@@ -178,11 +185,13 @@
         if (!p || typeof p.getCurrentTime !== 'function') return;
         document.getElementById('t-' + t).value = fmt(p.getCurrentTime());
         updateTrimBar();
+        focusP();
     }
 
     function resetT(t) { 
         document.getElementById('t-' + t).value = "00:00:00";
         updateTrimBar();
+        focusP();
     }
 
     function jumpT(t) {
@@ -190,9 +199,13 @@
         let v = toSec(document.getElementById('t-' + t).value);
         if (t === 'end' && v > 2) v -= 2;
         p.seekTo(v, true);
+        focusP();
     }
 
-    function sk(s) { if (p) p.seekTo(p.getCurrentTime() + s, true); }
+    function sk(s) { 
+        if (p) p.seekTo(p.getCurrentTime() + s, true);
+        focusP();
+    }
 
     function updateTrimBar() {
         if (!p || typeof p.getDuration !== 'function') return;
@@ -235,6 +248,7 @@
         out.select();
         document.execCommand('copy');
         alert("共有用URLをコピーしました！");
+        focusP();
     }
 </script>
 </body>
