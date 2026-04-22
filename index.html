@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Video Player - Smart Scrollbar Update</title>
+    <title>Video Player - Smart Zoom Center</title>
     <style>
         body { font-family: "Helvetica Neue", Arial, sans-serif; background: #0f0f0f; color: #f1f1f1; display: flex; flex-direction: column; align-items: center; padding: 5px; margin: 0; }
         .wrapper { background: #1a1a1a; padding: 12px 15px; border-radius: 12px; max-width: 900px; width: 96%; border: 1px solid #333; margin-top: 5px; box-sizing: border-box; }
@@ -30,11 +30,9 @@
         .trim-handle { position: absolute; height: 100%; width: 12px; top: 0; z-index: 10; cursor: ew-resize; display: flex; justify-content: center; }
         .trim-handle::after { content: ''; width: 2px; height: 100%; background: #3ea6ff; box-shadow: 0 0 6px #3ea6ff; }
 
-        /* スクロールバーの色を動的に変更するための変数設定 */
         :root { --scrollbar-thumb: transparent; }
 
         .scroll-container { width: 100%; height: 12px; overflow-x: scroll; overflow-y: hidden; margin-bottom: 12px; display: block; transition: 0.3s; }
-        /* スクロールバーのカスタマイズ（PCのみ） */
         .scroll-container::-webkit-scrollbar { height: 8px; background: transparent; }
         .scroll-container::-webkit-scrollbar-thumb { 
             background: var(--scrollbar-thumb); 
@@ -265,7 +263,6 @@
         document.getElementById('z-content').style.width = contentWidth + "%";
         document.getElementById('scroll-bar-dummy').style.width = contentWidth + "%";
         
-        // ズーム倍率によってスクロールバーの色を変更
         const root = document.documentElement;
         if (zoom > 1) {
             root.style.setProperty('--scrollbar-thumb', '#555');
@@ -274,6 +271,7 @@
         }
         
         updateUI();
+        centerPlayhead(); // ズーム時、停止中もヘッドを中央にする
     }
 
     function changeZoom(d) {
@@ -285,6 +283,16 @@
     function syncView(scroller) {
         const viewport = document.getElementById('z-viewport');
         viewport.scrollLeft = scroller.scrollLeft;
+    }
+
+    // 再生ヘッドを画面中央に持ってくる処理
+    function centerPlayhead() {
+        if (!p || !p.getCurrentTime || zoom <= 1) return;
+        const vp = document.getElementById('z-viewport');
+        const head = document.getElementById('zoom-play-head');
+        const scrollPos = head.offsetLeft - vp.clientWidth / 2;
+        vp.scrollLeft = scrollPos;
+        document.getElementById('scroll-bar-container').scrollLeft = scrollPos;
     }
 
     function updateUI() {
@@ -338,10 +346,7 @@
             updateUI();
             
             if (zoom > 1 && p.getPlayerState() === 1) {
-                const vp = document.getElementById('z-viewport'), head = document.getElementById('zoom-play-head');
-                const scrollPos = head.offsetLeft - vp.clientWidth / 2;
-                vp.scrollLeft = scrollPos;
-                document.getElementById('scroll-bar-container').scrollLeft = scrollPos;
+                centerPlayhead();
             }
             if (p.getPlayerState() === 1 && e > s && (n >= e || n < s - 1)) p.seekTo(s);
         }, 100);
