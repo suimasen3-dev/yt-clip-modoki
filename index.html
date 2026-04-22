@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Player</title>
+    <title>Video Player - Zoom Editor</title>
     <style>
         body { font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif; background: #0f0f0f; color: #f1f1f1; display: flex; flex-direction: column; align-items: center; padding: 10px; margin: 0; }
-        .wrapper { background: #1a1a1a; padding: 20px; border-radius: 12px; max-width: 860px; width: 95%; margin-top: 10px; border: 1px solid #333; }
+        .wrapper { background: #1a1a1a; padding: 20px; border-radius: 12px; max-width: 900px; width: 95%; margin-top: 10px; border: 1px solid #333; }
+        
         .input-row { display: flex; gap: 8px; margin-bottom: 15px; align-items: center; }
         input[type="text"] { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #333; background: #2a2a2a; color: #fff; outline: none; font-size: 14px; }
         
@@ -14,80 +15,86 @@
         #player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         
         .status-line { width: 100%; text-align: center; margin-bottom: 4px; height: 16px; }
-        #fixed-time { font-family: monospace; font-size: 14px; color: #3ea6ff; font-weight: bold; letter-spacing: 1px; }
+        #fixed-time { font-family: monospace; font-size: 14px; color: #3ea6ff; font-weight: bold; }
 
-        /* 強化されたシークバーエリア */
-        .seek-area { width: 100%; height: 30px; margin-bottom: 15px; position: relative; display: flex; align-items: center; }
-        .seek-bg { width: 100%; height: 6px; background: #333; border-radius: 3px; position: relative; overflow: visible; cursor: pointer; }
+        /* 全体シークバー（ナビ用） */
+        .full-nav-bar { width: 100%; height: 10px; background: #333; position: relative; margin-bottom: 20px; cursor: pointer; border-radius: 5px; }
+        #full-play-head { position: absolute; height: 14px; width: 2px; background: #fff; top: -2px; left: 0; }
+        #full-trim-range { position: absolute; height: 100%; background: #ff0000; opacity: 0.3; left: 0; width: 0; border-radius: 5px; }
+
+        /* ズームエリアのコントロール */
+        .zoom-ctrls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 5px; font-size: 12px; color: #aaa; }
+        .zoom-ctrls button { padding: 2px 10px; background: #444; color: #fff; border-radius: 4px; font-size: 14px; }
+
+        /* ズームシークバー（作業用） */
+        .zoom-viewport { width: 100%; height: 50px; background: #222; border: 1px solid #444; position: relative; overflow-x: auto; overflow-y: hidden; margin-bottom: 15px; cursor: crosshair; }
+        /* スクロールバーの非表示（お好みで） */
+        .zoom-viewport::-webkit-scrollbar { height: 6px; }
+        .zoom-viewport::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+
+        .zoom-content { height: 100%; position: relative; min-width: 100%; transition: width 0.1s; }
         
-        /* 赤いループ範囲 */
-        #trim-bar { position: absolute; height: 100%; background: #ff0000; opacity: 0.3; left: 0; width: 0; z-index: 1; pointer-events: none; }
+        #zoom-trim-bar { position: absolute; height: 100%; background: #ff0000; opacity: 0.2; pointer-events: none; }
+        #zoom-play-head { position: absolute; height: 100%; width: 2px; background: #fff; z-index: 5; pointer-events: none; box-shadow: 0 0 5px #fff; }
         
-        /* 白い再生ヘッド（現在の位置） */
-        #play-head { position: absolute; height: 18px; width: 3px; background: #fff; top: 50%; transform: translate(-50%, -50%); left: 0; z-index: 5; box-shadow: 0 0 5px rgba(0,0,0,0.5); border-radius: 2px; pointer-events: none; }
-        
-        /* トリムハンドル（開始・終了地点の細い棒） */
-        .trim-handle { position: absolute; height: 24px; width: 10px; top: 50%; transform: translate(-50%, -50%); z-index: 10; cursor: ew-resize; display: flex; justify-content: center; align-items: center; }
-        .trim-handle::after { content: ''; width: 2px; height: 100%; background: #3ea6ff; box-shadow: 0 0 8px #3ea6ff; }
-        #handle-start { left: 0; }
-        #handle-end { left: 0; }
+        .trim-handle { position: absolute; height: 100%; width: 14px; top: 0; z-index: 10; cursor: ew-resize; display: flex; justify-content: center; }
+        .trim-handle::after { content: ''; width: 4px; height: 100%; background: #3ea6ff; box-shadow: 0 0 8px #3ea6ff; border-radius: 2px; }
 
         .playback-ctrls { display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 15px; }
-        .btn-play { background: #fff; color: #000; width: 150px; height: 40px; border-radius: 20px; font-size: 14px; }
+        .btn-play { background: #fff; color: #000; width: 150px; height: 40px; border-radius: 20px; }
         .btn-frame { background: #444; color: #fff; padding: 8px 15px; }
 
         .time-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #262626; padding: 12px; border-radius: 8px; margin-bottom: 15px; }
-        .time-item { display: flex; flex-direction: column; gap: 5px; }
-        .time-item label { font-size: 11px; color: #888; }
-        .time-ctrls { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
-        .time-ctrls input { width: 95px; padding: 6px; border-radius: 4px; border: 1px solid #444; background: #0f0f0f; color: #fff; font-size: 13px; font-family: monospace; }
+        .time-item label { font-size: 11px; color: #888; display: block; margin-bottom: 5px; }
+        .time-ctrls { display: flex; gap: 4px; }
+        .time-ctrls input { width: 90px; padding: 6px; background: #0f0f0f; color: #fff; border: 1px solid #444; border-radius: 4px; font-family: monospace; }
         
-        button { border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: opacity 0.2s; white-space: nowrap; outline: none; }
+        button { border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
         button:hover { opacity: 0.8; }
-        .btn-load { background: #cc0000; color: white; padding: 10px 15px; }
-        .btn-paste { background: #444; color: white; padding: 10px 15px; }
-        .btn-set { background: #3ea6ff; color: white; flex: 1; min-width: 60px; padding: 8px; font-size: 12px; }
-        .btn-jump { background: #555; color: white; padding: 8px; font-size: 12px; }
-        .btn-clear { background: #2a2a2a; color: #888; padding: 8px; font-size: 12px; }
-        .btn-reset-text { background: #2a2a2a; color: #ccc; font-size: 10px; padding: 8px; }
-        
+        .btn-set { background: #3ea6ff; color: white; padding: 6px 10px; font-size: 12px; border-radius: 4px; }
+        .btn-nav { background: #333; color: #ccc; padding: 8px; font-size: 11px; border-radius: 4px; }
         .nav-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-bottom: 15px; }
-        .btn-nav { background: #333; color: #ccc; padding: 8px; font-size: 11px; }
         
-        .share-box { border-top: 1px solid #333; padding-top: 15px; text-align: center; }
-        #output-url { width: 100%; padding: 10px; margin-top: 10px; background: #0f0f0f; border: 1px solid #333; color: #00ff41; font-family: monospace; font-size: 11px; border-radius: 4px; box-sizing: border-box; }
+        .share-box { border-top: 1px solid #333; padding-top: 15px; }
+        #output-url { width: 100%; padding: 10px; margin-top: 10px; background: #0f0f0f; border: 1px solid #333; color: #00ff41; font-family: monospace; font-size: 11px; }
     </style>
 </head>
 <body>
 
 <div class="wrapper">
     <div class="input-row">
-        <input type="text" id="v-url" placeholder="YouTubeのURLを貼り付け">
-        <button class="btn-clear" onclick="document.getElementById('v-url').value=''">×</button>
-        <button class="btn-paste" onclick="pstV()">貼り付け</button>
-        <button class="btn-load" onclick="loadV()">読み込み</button>
+        <input type="text" id="v-url" placeholder="YouTube URLを貼り付け">
+        <button onclick="loadV()" style="background:#cc0000; color:#fff; padding:10px 20px; border-radius:6px;">読み込み</button>
     </div>
 
-    <div id="player-box">
-        <div id="player"></div>
-    </div>
-    
-    <div class="status-line">
-        <span id="fixed-time">00:00:00</span>
+    <div id="player-box"><div id="player"></div></div>
+    <div class="status-line"><span id="fixed-time">00:00:00</span></div>
+
+    <div class="full-nav-bar" onclick="seekFull(event)">
+        <div id="full-trim-range"></div>
+        <div id="full-play-head"></div>
     </div>
 
-    <div class="seek-area" id="seek-area">
-        <div class="seek-bg" id="seek-bg" onmousedown="seekVideo(event)">
-            <div id="trim-bar"></div>
-            <div id="play-head"></div>
-            <div class="trim-handle" id="handle-start" onmousedown="dragHandle(event, 'start')"></div>
-            <div class="trim-handle" id="handle-end" onmousedown="dragHandle(event, 'end')"></div>
+    <div class="zoom-ctrls">
+        <span>ZOOM:</span>
+        <button onclick="changeZoom(-1)">－</button>
+        <input type="range" id="zoom-slider" min="1" max="100" value="1" oninput="updateZoom()">
+        <button onclick="changeZoom(1)">＋</button>
+        <span id="zoom-val">1x</span>
+    </div>
+
+    <div class="zoom-viewport" id="z-viewport" onmousedown="seekZoom(event)">
+        <div class="zoom-content" id="z-content">
+            <div id="zoom-trim-bar"></div>
+            <div id="zoom-play-head"></div>
+            <div class="trim-handle" id="h-start" onmousedown="dragH(event, 'start')"></div>
+            <div class="trim-handle" id="h-end" onmousedown="dragH(event, 'end')"></div>
         </div>
     </div>
 
     <div class="playback-ctrls">
         <button class="btn-frame" onclick="step(-0.033)">◁ 1コマ</button>
-        <button class="btn-play" id="play-pause" onclick="togglePlay()">再生 / 一時停止</button>
+        <button class="btn-play" onclick="togglePlay()">再生 / 一時停止</button>
         <button class="btn-frame" onclick="step(0.033)">1コマ ▷</button>
     </div>
 
@@ -97,8 +104,6 @@
             <div class="time-ctrls">
                 <input type="text" id="t-start" value="00:00:00">
                 <button class="btn-set" onclick="setT('start')">セット</button>
-                <button class="btn-jump" onclick="jumpT('start')">飛ぶ</button>
-                <button class="btn-reset-text" onclick="resetT('start')">Reset</button>
             </div>
         </div>
         <div class="time-item">
@@ -106,201 +111,114 @@
             <div class="time-ctrls">
                 <input type="text" id="t-end" value="00:00:00">
                 <button class="btn-set" onclick="setT('end')">セット</button>
-                <button class="btn-jump" onclick="jumpT('end')">飛ぶ</button>
-                <button class="btn-reset-text" onclick="resetT('end')">Reset</button>
             </div>
         </div>
     </div>
 
     <div class="nav-grid">
-        <button class="btn-nav" onclick="sk(-60)">-1分</button>
-        <button class="btn-nav" onclick="sk(-30)">-30秒</button>
         <button class="btn-nav" onclick="sk(-10)">-10秒</button>
         <button class="btn-nav" onclick="sk(-5)">-5秒</button>
-        <button class="btn-nav" onclick="sk(-3)">-3秒</button>
-        <button class="btn-nav" onclick="sk(60)">+1分</button>
-        <button class="btn-nav" onclick="sk(30)">+30秒</button>
-        <button class="btn-nav" onclick="sk(10)">+10秒</button>
+        <button class="btn-nav" onclick="sk(-1)">-1秒</button>
+        <button class="btn-nav" onclick="sk(1)">+1秒</button>
         <button class="btn-nav" onclick="sk(5)">+5秒</button>
-        <button class="btn-nav" onclick="sk(3)">+3秒</button>
     </div>
 
     <div class="share-box">
-        <button class="btn-load" style="background: #333; width: 100%; height: 40px;" onclick="genUrl()">共有用URLを発行</button>
+        <button class="btn-nav" style="width:100%; background:#444;" onclick="genUrl()">共有用URLを発行</button>
         <input type="text" id="output-url" readonly>
     </div>
 </div>
 
 <script>
-    let p, loop;
+    let p, loop, zoom = 1;
     const tag = document.createElement('script');
     tag.src = "https://www.youtube.com/iframe_api";
     document.head.appendChild(tag);
 
-    function focusP() {
-        const iframe = document.getElementById('player');
-        if (iframe) iframe.focus();
-    }
-
     function fmt(s) {
-        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
-        return [h, m, sec].map(v => v.toString().padStart(2, '0')).join(':');
+        const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = Math.floor(s%60);
+        return [h,m,sec].map(v=>v.toString().padStart(2,'0')).join(':');
     }
-
     function toSec(str) {
         const parts = str.split(':').map(Number);
-        if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-        if (parts.length === 2) return parts[0] * 60 + parts[1];
-        return parts[0] || 0;
-    }
-
-    async function pstV() {
-        try {
-            const text = await navigator.clipboard.readText();
-            document.getElementById('v-url').value = text;
-        } catch (err) { alert('Permission denied'); }
-        focusP();
+        return parts[0]*3600 + parts[1]*60 + parts[2];
     }
 
     function onYouTubeIframeAPIReady() {
         const u = new URLSearchParams(window.location.search), v = u.get('v');
         if (v) {
-            document.getElementById('t-start').value = fmt(u.get('s') || 0);
-            document.getElementById('t-end').value = fmt(u.get('e') || 0);
-            document.getElementById('v-url').value = "https://www.youtube.com/watch?v=" + v;
+            document.getElementById('t-start').value = fmt(u.get('s')||0);
+            document.getElementById('t-end').value = fmt(u.get('e')||0);
             init(v);
         }
-    }
-
-    function parseId(url) {
-        if (!url) return null;
-        const reg = /^.*(youtu.be\/|v\/|watch\?v=|shorts\/|live\/)([^#\&\?]*).*/;
-        const m = url.match(reg);
-        return (m && m[2].length === 11) ? m[2] : (url.length === 11 ? url : null);
     }
 
     function init(vid) {
         if (p) p.destroy();
         p = new YT.Player('player', {
             videoId: vid,
-            playerVars: { 'autoplay': 1, 'controls': 1, 'rel': 0, 'mute': 0 },
-            events: {
-                'onReady': (e) => {
-                    const s = toSec(document.getElementById('t-start').value);
-                    if (s > 0) e.target.seekTo(s);
-                    updateTrimUI();
-                    runLoop();
-                },
-                'onStateChange': (e) => {
-                    if (e.data == YT.PlayerState.PLAYING) runLoop();
-                }
-            }
+            playerVars: { 'autoplay': 1, 'controls': 1 },
+            events: { 'onReady': () => { updateUI(); runLoop(); } }
         });
     }
 
     function loadV() {
-        const id = parseId(document.getElementById('v-url').value);
-        if (id) {
-            document.getElementById('t-start').value = "00:00:00";
-            document.getElementById('t-end').value = "00:00:00";
-            document.getElementById('output-url').value = "";
-            updateTrimUI();
-            init(id);
-        }
+        const url = document.getElementById('v-url').value;
+        const id = url.match(/(?:v=|\/v\/|youtu.be\/|shorts\/|live\/)([^#\&\?]*)/)?.[1];
+        if (id) init(id);
     }
 
-    function togglePlay() {
-        if (!p) return;
-        p.getPlayerState() == 1 ? p.pauseVideo() : p.playVideo();
-        focusP();
+    function updateZoom() {
+        zoom = document.getElementById('zoom-slider').value;
+        document.getElementById('zoom-val').innerText = zoom + "x";
+        document.getElementById('z-content').style.width = (zoom * 100) + "%";
+        updateUI();
     }
 
-    function step(s) {
-        if (!p) return;
-        p.pauseVideo();
-        p.seekTo(p.getCurrentTime() + s, true);
-        focusP();
+    function changeZoom(delta) {
+        const s = document.getElementById('zoom-slider');
+        s.value = parseInt(s.value) + delta;
+        updateZoom();
     }
 
-    function setT(t) {
-        if (!p || typeof p.getCurrentTime !== 'function') return;
-        document.getElementById('t-' + t).value = fmt(p.getCurrentTime());
-        updateTrimUI();
-        focusP();
-    }
-
-    function resetT(t) { 
-        document.getElementById('t-' + t).value = "00:00:00";
-        updateTrimUI();
-        focusP();
-    }
-
-    function jumpT(t) {
-        if (!p) return;
-        let v = toSec(document.getElementById('t-' + t).value);
-        if (t === 'end' && v > 2) v -= 2;
-        p.seekTo(v, true);
-        focusP();
-    }
-
-    function sk(s) { if (p) p.seekTo(p.getCurrentTime() + s, true); focusP(); }
-
-    // UI更新（トリムバーとハンドル）
-    function updateTrimUI() {
-        if (!p || typeof p.getDuration !== 'function') return;
-        const total = p.getDuration();
-        const s = toSec(document.getElementById('t-start').value);
-        const e = toSec(document.getElementById('t-end').value);
+    function updateUI() {
+        if (!p || !p.getDuration) return;
+        const total = p.getDuration(), s = toSec(document.getElementById('t-start').value), e = toSec(document.getElementById('t-end').value), n = p.getCurrentTime();
         
-        const bar = document.getElementById('trim-bar');
-        const hStart = document.getElementById('handle-start');
-        const hEnd = document.getElementById('handle-end');
-
-        const sPos = (s / total * 100);
-        const ePos = (e / total * 100);
-
-        hStart.style.left = sPos + "%";
-        hEnd.style.left = ePos + "%";
-
-        if (e > s) {
-            bar.style.left = sPos + "%";
-            bar.style.width = (ePos - sPos) + "%";
-        } else {
-            bar.style.width = "0%";
-        }
+        // 全体ナビ
+        document.getElementById('full-play-head').style.left = (n/total*100) + "%";
+        const fr = document.getElementById('full-trim-range');
+        if (e > s) { fr.style.left = (s/total*100) + "%"; fr.style.width = ((e-s)/total*100) + "%"; }
+        
+        // ズームバー
+        document.getElementById('zoom-play-head').style.left = (n/total*100) + "%";
+        document.getElementById('h-start').style.left = (s/total*100) + "%";
+        document.getElementById('h-end').style.left = (e/total*100) + "%";
+        const zr = document.getElementById('zoom-trim-bar');
+        if (e > s) { zr.style.left = (s/total*100) + "%"; zr.style.width = ((e-s)/total*100) + "%"; }
     }
 
-    // シークバーのクリック
-    function seekVideo(e) {
-        if (e.target.classList.contains('trim-handle')) return; // ハンドル操作時は無視
-        if (!p || typeof p.getDuration !== 'function') return;
-        const bg = document.getElementById('seek-bg');
-        const rect = bg.getBoundingClientRect();
-        const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-        p.seekTo(p.getDuration() * pos, true);
+    function seekFull(e) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        p.seekTo(p.getDuration() * (e.clientX - rect.left) / rect.width);
     }
 
-    // ハンドルのドラッグ操作
-    function dragHandle(e, type) {
+    function seekZoom(e) {
+        if (e.target.classList.contains('trim-handle')) return;
+        const rect = document.getElementById('z-content').getBoundingClientRect();
+        p.seekTo(p.getDuration() * (e.clientX - rect.left) / rect.width);
+    }
+
+    function dragH(e, type) {
         e.stopPropagation();
-        if (!p || typeof p.getDuration !== 'function') return;
-        const total = p.getDuration();
-        const bg = document.getElementById('seek-bg');
-        const rect = bg.getBoundingClientRect();
-
+        const content = document.getElementById('z-content'), total = p.getDuration();
         const onMove = (me) => {
-            const pos = Math.max(0, Math.min(1, (me.clientX - rect.left) / rect.width));
-            const sec = total * pos;
+            const rect = content.getBoundingClientRect();
+            const sec = total * Math.max(0, Math.min(1, (me.clientX - rect.left) / rect.width));
             document.getElementById('t-' + type).value = fmt(sec);
-            updateTrimUI();
+            updateUI();
         };
-
-        const onUp = () => {
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
-            focusP();
-        };
-
+        const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onUp);
     }
@@ -308,32 +226,30 @@
     function runLoop() {
         if (loop) clearInterval(loop);
         loop = setInterval(() => {
-            if (!p || typeof p.getCurrentTime !== 'function') return;
-            const s = toSec(document.getElementById('t-start').value);
-            const e = toSec(document.getElementById('t-end').value);
-            const n = p.getCurrentTime();
-            const total = p.getDuration();
-
-            if (total > 0) {
-                document.getElementById('play-head').style.left = (n / total * 100) + "%";
-                document.getElementById('fixed-time').innerText = fmt(n);
-                // ハンドルの位置を再確認（動画読み込み直後などのため）
-                updateTrimUI();
+            if (!p || !p.getCurrentTime) return;
+            const s = toSec(document.getElementById('t-start').value), e = toSec(document.getElementById('t-end').value), n = p.getCurrentTime();
+            document.getElementById('fixed-time').innerText = fmt(n);
+            updateUI();
+            
+            // 再生位置を追跡（ズーム時のみ）
+            if (zoom > 1 && p.getPlayerState() === 1) {
+                const vp = document.getElementById('z-viewport'), head = document.getElementById('zoom-play-head');
+                vp.scrollLeft = head.offsetLeft - vp.clientWidth / 2;
             }
 
             if (p.getPlayerState() === 1 && e > s && (n >= e || n < s - 1)) p.seekTo(s);
         }, 100);
     }
 
+    function togglePlay() { p.getPlayerState()==1 ? p.pauseVideo() : p.playVideo(); }
+    function step(s) { p.pauseVideo(); p.seekTo(p.getCurrentTime()+s, true); }
+    function sk(s) { p.seekTo(p.getCurrentTime()+s, true); }
+    function setT(t) { document.getElementById('t-'+t).value = fmt(p.getCurrentTime()); updateUI(); }
     function genUrl() {
-        const id = parseId(document.getElementById('v-url').value);
-        if (!id) return;
-        const s = toSec(document.getElementById('t-start').value), e = toSec(document.getElementById('t-end').value), base = window.location.href.split('?')[0];
-        const out = document.getElementById('output-url');
-        out.value = `${base}?v=${id}&s=${s}&e=${e}`;
-        out.select(); document.execCommand('copy');
-        alert("共有用URLをコピーしました");
-        focusP();
+        const id = p.getVideoData().video_id, s = toSec(document.getElementById('t-start').value), e = toSec(document.getElementById('t-end').value);
+        const url = `${window.location.href.split('?')[0]}?v=${id}&s=${s}&e=${e}`;
+        document.getElementById('output-url').value = url;
+        navigator.clipboard.writeText(url); alert("コピーしました！");
     }
 </script>
 </body>
