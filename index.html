@@ -13,20 +13,25 @@
         #player-box { position: relative; width: 100%; padding-top: 56.25%; background: #000; margin-bottom: 10px; border-radius: 6px; overflow: hidden; }
         #player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         
-        /* タイムコード表示行（固定場所） */
         .status-line { width: 100%; text-align: center; margin-bottom: 4px; height: 16px; }
         #fixed-time { font-family: monospace; font-size: 14px; color: #3ea6ff; font-weight: bold; letter-spacing: 1px; }
 
         /* 強化されたシークバーエリア */
-        .seek-area { width: 100%; height: 20px; margin-bottom: 15px; position: relative; cursor: pointer; display: flex; align-items: center; }
-        .seek-bg { width: 100%; height: 6px; background: #333; border-radius: 3px; position: relative; overflow: visible; }
+        .seek-area { width: 100%; height: 30px; margin-bottom: 15px; position: relative; display: flex; align-items: center; }
+        .seek-bg { width: 100%; height: 6px; background: #333; border-radius: 3px; position: relative; overflow: visible; cursor: pointer; }
         
         /* 赤いループ範囲 */
-        #trim-bar { position: absolute; height: 100%; background: #ff0000; opacity: 0.5; left: 0; width: 0; transition: 0.3s; z-index: 1; }
+        #trim-bar { position: absolute; height: 100%; background: #ff0000; opacity: 0.3; left: 0; width: 0; z-index: 1; pointer-events: none; }
         
-        /* 白い再生ヘッド（縦棒） */
-        #play-head { position: absolute; height: 18px; width: 3px; background: #fff; top: 50%; transform: translate(-50%, -50%); left: 0; z-index: 3; box-shadow: 0 0 5px rgba(0,0,0,0.5); border-radius: 2px; pointer-events: none; }
+        /* 白い再生ヘッド（現在の位置） */
+        #play-head { position: absolute; height: 18px; width: 3px; background: #fff; top: 50%; transform: translate(-50%, -50%); left: 0; z-index: 5; box-shadow: 0 0 5px rgba(0,0,0,0.5); border-radius: 2px; pointer-events: none; }
         
+        /* トリムハンドル（開始・終了地点の細い棒） */
+        .trim-handle { position: absolute; height: 24px; width: 10px; top: 50%; transform: translate(-50%, -50%); z-index: 10; cursor: ew-resize; display: flex; justify-content: center; align-items: center; }
+        .trim-handle::after { content: ''; width: 2px; height: 100%; background: #3ea6ff; box-shadow: 0 0 8px #3ea6ff; }
+        #handle-start { left: 0; }
+        #handle-end { left: 0; }
+
         .playback-ctrls { display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 15px; }
         .btn-play { background: #fff; color: #000; width: 150px; height: 40px; border-radius: 20px; font-size: 14px; }
         .btn-frame { background: #444; color: #fff; padding: 8px 15px; }
@@ -71,10 +76,12 @@
         <span id="fixed-time">00:00:00</span>
     </div>
 
-    <div class="seek-area" id="seek-area" onmousedown="seekVideo(event)">
-        <div class="seek-bg">
+    <div class="seek-area" id="seek-area">
+        <div class="seek-bg" id="seek-bg" onmousedown="seekVideo(event)">
             <div id="trim-bar"></div>
             <div id="play-head"></div>
+            <div class="trim-handle" id="handle-start" onmousedown="dragHandle(event, 'start')"></div>
+            <div class="trim-handle" id="handle-end" onmousedown="dragHandle(event, 'end')"></div>
         </div>
     </div>
 
@@ -181,7 +188,7 @@
                 'onReady': (e) => {
                     const s = toSec(document.getElementById('t-start').value);
                     if (s > 0) e.target.seekTo(s);
-                    updateTrimBar();
+                    updateTrimUI();
                     runLoop();
                 },
                 'onStateChange': (e) => {
@@ -197,7 +204,7 @@
             document.getElementById('t-start').value = "00:00:00";
             document.getElementById('t-end').value = "00:00:00";
             document.getElementById('output-url').value = "";
-            updateTrimBar();
+            updateTrimUI();
             init(id);
         }
     }
@@ -218,13 +225,13 @@
     function setT(t) {
         if (!p || typeof p.getCurrentTime !== 'function') return;
         document.getElementById('t-' + t).value = fmt(p.getCurrentTime());
-        updateTrimBar();
+        updateTrimUI();
         focusP();
     }
 
     function resetT(t) { 
         document.getElementById('t-' + t).value = "00:00:00";
-        updateTrimBar();
+        updateTrimUI();
         focusP();
     }
 
@@ -238,36 +245,64 @@
 
     function sk(s) { if (p) p.seekTo(p.getCurrentTime() + s, true); focusP(); }
 
-    function updateTrimBar() {
+    // UI更新（トリムバーとハンドル）
+    function updateTrimUI() {
         if (!p || typeof p.getDuration !== 'function') return;
-        const total = p.getDuration(), s = toSec(document.getElementById('t-start').value), e = toSec(document.getElementById('t-end').value), bar = document.getElementById('trim-bar');
+        const total = p.getDuration();
+        const s = toSec(document.getElementById('t-start').value);
+        const e = toSec(document.getElementById('t-end').value);
+        
+        const bar = document.getElementById('trim-bar');
+        const hStart = document.getElementById('handle-start');
+        const hEnd = document.getElementById('handle-end');
+
+        const sPos = (s / total * 100);
+        const ePos = (e / total * 100);
+
+        hStart.style.left = sPos + "%";
+        hEnd.style.left = ePos + "%";
+
         if (e > s) {
-            bar.style.left = (s / total * 100) + "%"; bar.style.width = ((e - s) / total * 100) + "%";
-        } else { bar.style.width = "0%"; }
+            bar.style.left = sPos + "%";
+            bar.style.width = (ePos - sPos) + "%";
+        } else {
+            bar.style.width = "0%";
+        }
     }
 
+    // シークバーのクリック
     function seekVideo(e) {
+        if (e.target.classList.contains('trim-handle')) return; // ハンドル操作時は無視
         if (!p || typeof p.getDuration !== 'function') return;
-        const area = document.getElementById('seek-area');
-        const rect = area.getBoundingClientRect();
-        
-        const updateSeek = (clientX) => {
-            const offsetX = clientX - rect.left;
-            const percentage = Math.max(0, Math.min(1, offsetX / rect.width));
-            const newTime = p.getDuration() * percentage;
-            p.seekTo(newTime, true);
+        const bg = document.getElementById('seek-bg');
+        const rect = bg.getBoundingClientRect();
+        const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        p.seekTo(p.getDuration() * pos, true);
+    }
+
+    // ハンドルのドラッグ操作
+    function dragHandle(e, type) {
+        e.stopPropagation();
+        if (!p || typeof p.getDuration !== 'function') return;
+        const total = p.getDuration();
+        const bg = document.getElementById('seek-bg');
+        const rect = bg.getBoundingClientRect();
+
+        const onMove = (me) => {
+            const pos = Math.max(0, Math.min(1, (me.clientX - rect.left) / rect.width));
+            const sec = total * pos;
+            document.getElementById('t-' + type).value = fmt(sec);
+            updateTrimUI();
         };
 
-        updateSeek(e.clientX);
-        
-        const moveHandler = (moveEvent) => updateSeek(moveEvent.clientX);
-        const upHandler = () => {
-            window.removeEventListener('mousemove', moveHandler);
-            window.removeEventListener('mouseup', upHandler);
+        const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
             focusP();
         };
-        window.addEventListener('mousemove', moveHandler);
-        window.addEventListener('mouseup', upHandler);
+
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
     }
 
     function runLoop() {
@@ -279,19 +314,14 @@
             const n = p.getCurrentTime();
             const total = p.getDuration();
 
-            // 再生ヘッドの同期と固定位置タイムコードの更新
             if (total > 0) {
-                const head = document.getElementById('play-head');
-                const timeLabel = document.getElementById('fixed-time');
-                const pos = (n / total * 100);
-                head.style.left = pos + "%";
-                timeLabel.innerText = fmt(n);
+                document.getElementById('play-head').style.left = (n / total * 100) + "%";
+                document.getElementById('fixed-time').innerText = fmt(n);
+                // ハンドルの位置を再確認（動画読み込み直後などのため）
+                updateTrimUI();
             }
 
-            // ループ処理
-            if (p.getPlayerState() === 1) {
-                if (e > s && (n >= e || n < s - 1)) p.seekTo(s);
-            }
+            if (p.getPlayerState() === 1 && e > s && (n >= e || n < s - 1)) p.seekTo(s);
         }, 100);
     }
 
@@ -299,9 +329,9 @@
         const id = parseId(document.getElementById('v-url').value);
         if (!id) return;
         const s = toSec(document.getElementById('t-start').value), e = toSec(document.getElementById('t-end').value), base = window.location.href.split('?')[0];
-        const full = `${base}?v=${id}&s=${s}&e=${e}`;
         const out = document.getElementById('output-url');
-        out.value = full; out.select(); document.execCommand('copy');
+        out.value = `${base}?v=${id}&s=${s}&e=${e}`;
+        out.select(); document.execCommand('copy');
         alert("共有用URLをコピーしました");
         focusP();
     }
